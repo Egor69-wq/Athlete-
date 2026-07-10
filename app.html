@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<title>Athlete Twin</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#0a0a0f;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
+.header{text-align:center;padding:16px;border-bottom:1px solid #1a1a2e}
+.title{font-size:22px;font-weight:700;background:linear-gradient(135deg,#4CAF50,#2196F3);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tabs{display:flex;gap:6px;margin:12px;background:#12121a;border-radius:12px;padding:3px}
+.tab{flex:1;padding:10px;background:transparent;border:none;color:#666;border-radius:10px;font-size:13px;cursor:pointer}
+.tab.active{background:#1a1a2e;color:#4CAF50}
+.card{background:#12121a;border-radius:14px;padding:16px;margin:12px;border:1px solid #1a1a2e}
+.card-title{font-size:14px;font-weight:600;margin-bottom:10px;color:#888}
+input,select{width:100%;padding:12px;background:#0a0a0f;border:1px solid #1a1a2e;border-radius:10px;color:#fff;font-size:15px;outline:none;margin-bottom:8px}
+input:focus{border-color:#4CAF50}
+.btn{width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:6px}
+.btn-green{background:#4CAF50;color:#fff}
+.btn-red{background:#ff525230;color:#ff5252}
+.btn-blue{background:#2196F3;color:#fff}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+.hidden{display:none}
+.result-item{padding:10px;background:#0a0a0f;border-radius:8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.result-item button{background:#4CAF50;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600}
+.stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1a1a2e}
+.stat-val{font-weight:600;color:#4CAF50}
+#viewer3D{width:100%;height:400px;background:#0a0a0f;border-radius:12px;touch-action:manipulation}
+.slider-container{margin:8px 0}
+.slider-container label{font-size:11px;color:#888;display:flex;justify-content:space-between}
+.slider-container input[type=range]{width:100%;margin:4px 0}
+canvas{display:block}
+</style>
+</head>
+<body>
+
+<div class="header">
+<div class="title">🧬 Athlete Digital Twin</div>
+</div>
+
+<div class="tabs">
+<button class="tab active" onclick="switchTab('eat')">🍽 Еда</button>
+<button class="tab" onclick="switchTab('sim')">🔄 Симуляция</button>
+<button class="tab" onclick="switchTab('body')">🧍 3D Тело</button>
+</div>
+
+<div id="tab-eat">
+<div class="card">
+<div class="card-title">🔍 Поиск продукта</div>
+<input type="text" id="search" placeholder="Курица, гречка, творог..." oninput="doSearch()">
+<input type="number" id="grams" value="100" min="1" max="5000" placeholder="Граммы">
+<div id="results"></div>
+</div>
+<div class="card">
+<div class="card-title">📋 Дневник (<span id="count">0</span>)</div>
+<div id="diary"></div>
+<div id="totals" class="hidden">
+<div class="stat-row"><span>Белок</span><span class="stat-val" id="tp">0</span></div>
+<div class="stat-row"><span>Жиры</span><span class="stat-val" id="tf">0</span></div>
+<div class="stat-row"><span>Углеводы</span><span class="stat-val" id="tc">0</span></div>
+<div class="stat-row"><span>Калории</span><span class="stat-val" id="tcal">0</span></div>
+</div>
+<button class="btn btn-red" onclick="resetDiary()">🗑 Сбросить</button>
+</div>
+</div>
+
+<div id="tab-sim" class="hidden">
+<div class="card">
+<div class="card-title">👤 Параметры</div>
+<div class="row"><input type="number" id="w" value="80" placeholder="Вес (кг)"><input type="number" id="h" value="175" placeholder="Рост (см)"></div>
+<div class="row"><input type="number" id="age" value="25" placeholder="Возраст"><select id="gender"><option value="male">Муж</option><option value="female">Жен</option></select></div>
+<div class="row"><input type="number" id="sleep" value="7" placeholder="Сон (ч)"><input type="number" id="stress" value="0.3" placeholder="Стресс" step="0.1"></div>
+<input type="number" id="days" value="30" placeholder="Дней">
+<button class="btn btn-green" onclick="runSim()">🚀 Запустить симуляцию</button>
+</div>
+<div id="simResult" class="hidden">
+<div class="card">
+<div class="card-title">📊 Результат</div>
+<canvas id="chart" width="350" height="200"></canvas>
+<div id="simStats"></div>
+</div>
+</div>
+</div>
+
+<div id="tab-body" class="hidden">
+<div class="card">
+<div class="card-title">🧍 3D Модель тела</div>
+<div id="viewer3D"></div>
+<div class="slider-container">
+<label>Мышцы <span id="muscleVal">45%</span></label>
+<input type="range" id="muscleSlider" min="30" max="60" value="45" oninput="updateBody()">
+</div>
+<div class="slider-container">
+<label>Жир <span id="fatVal">20%</span></label>
+<input type="range" id="fatSlider" min="3" max="50" value="20" oninput="updateBody()">
+</div>
+<div class="slider-container">
+<label>Прозрачность кожи <span id="skinVal">100%</span></label>
+<input type="range" id="skinSlider" min="0" max="100" value="100" oninput="updateBody()">
+</div>
+<div class="row">
+<button class="btn btn-blue" onclick="showLayer('skin')">🟤 Кожа</button>
+<button class="btn btn-blue" onclick="showLayer('muscle')">🔴 Мышцы</button>
+<button class="btn btn-blue" onclick="showLayer('bone')">⚪ Кости</button>
+</div>
+</div>
+</div>
+
+<script>
+// === ГЛОБАЛЬНЫЕ ===
+let diary=[];
+let scene,camera,renderer,humanMesh;
+let muscleShape,fatShape,skinMaterial;
+
+// === НАВИГАЦИЯ ===
+function switchTab(t){
+document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+document.querySelectorAll('[id^="tab-"]').forEach(d=>d.classList.add('hidden'));
+document.getElementById('tab-'+t).classList.remove('hidden');
+event.target.classList.add('active');
+if(t==='body')init3D();
+}
+
+// === 3D VIEWER ===
+function init3D(){
+if(scene)return;
+let container=document.getElementById('viewer3D');
+let w=container.offsetWidth;
+let h=container.offsetHeight;
+
+scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0a0a0f);
+
+camera=new THREE.PerspectiveCamera(45,w/h,0.1,1000);
+camera.position.set(0,1.5,6);
+camera.lookAt(0,0,0);
+
+renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(w,h);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+container.appendChild(renderer.domElement);
+
+// Освещение
+let light1=new THREE.DirectionalLight(0xffffff,1.2);
+light1.position.set(3,5,3);
+scene.add(light1);
+let light2=new THREE.DirectionalLight(0x4488ff,0.5);
+light2.position.set(-3,2,-3);
+scene.add(light2);
+let amb=new THREE.AmbientLight(0x333344,0.6);
+scene.add(amb);
+
+// Сетка пола
+let grid=new THREE.GridHelper(4,20,0x1a1a2e,0x111122);
+grid.position.y=-2;
+scene.add(grid);
+
+// Человек
+createHuman();
+animate3D();
+
+// Тач-управление
+let isDragging=false,prevX=0,prevY=0;
+renderer.domElement.addEventListener('touchstart',e=>{
+isDragging=true;
+prevX=e.touches[0].clientX;
+prevY=e.touches[0].clientY;
+});
+renderer.domElement.addEventListener('touchmove',e=>{
+if(!isDragging)return;
+let dx=e.touches[0].clientX-prevX;
+let dy=e.touches[0].clientY-prevY;
+humanMesh.rotation.y+=dx*0.01;
+camera.position.y+=dy*0.02;
+camera.position.y=Math.max(0,Math.min(4,camera.position.y));
+camera.lookAt(0,0.5,0);
+prevX=e.touches[0].clientX;
+prevY=e.touches[0].clientY;
+});
+renderer.domElement.addEventListener('touchend',()=>{isDragging=false;});
+
+window.addEventListener('resize',()=>{
+let w=container.offsetWidth;
+let h=container.offsetHeight;
+camera.aspect=w/h;
+camera.updateProjectionMatrix();
+renderer.setSize(w,h);
+});
+}
+
+function createHuman(){
+humanMesh=new THREE.Group();
+
+// Тело (торс)
+let torsoGeo=new THREE.CylinderGeometry(0.6,0.55,2.2,16);
+let torsoMat=new THREE.MeshPhongMaterial({color:0x4CAF50,transparent:true,opacity:0.3});
+let torso=new THREE.Mesh(torsoGeo,torsoMat);
+torso.position.y=0.2;
+humanMesh.add(torso);
+
+// Голова
+let headGeo=new THREE.SphereGeometry(0.35,16,16);
+let headMat=new THREE.MeshPhongMaterial({color:0xffcc99});
+let head=new THREE.Mesh(headGeo,headMat);
+head.position.y=1.5;
+head.name='head';
+humanMesh.add(head);
+
+// Руки
+for(let side of[-1,1]){
+let armGeo=new THREE.CylinderGeometry(0.15,0.18,1.4,8);
+let armMat=new THREE.MeshPhongMaterial({color:0x4CAF50,transparent:true,opacity:0.3});
+let arm=new THREE.Mesh(armGeo,armMat);
+arm.position.set(side*0.8,0.3,0);
+arm.name='arm';
+humanMesh.add(arm);
+}
+
+// Ноги
+for(let side of[-1,1]){
+let legGeo=new THREE.CylinderGeometry(0.2,0.22,1.8,8);
+let legMat=new THREE.MeshPhongMaterial({color:0x4CAF50,transparent:true,opacity:0.3});
+let leg=new THREE.Mesh(legGeo,legMat);
+leg.position.set(side*0.3,-1.5,0);
+leg.name='leg';
+humanMesh.add(leg);
+}
+
+// Жировой слой
+let fatGeo=new THREE.CylinderGeometry(0.62,0.57,2.2,16);
+skinMaterial=new THREE.MeshPhongMaterial({color:0xffcc99,transparent:true,opacity:1});
+muscleShape=new THREE.Mesh(fatGeo,skinMaterial);
+muscleShape.position.y=0.2;
+muscleShape.scale.set(1,1,1);
+muscleShape.name='fatShape';
+humanMesh.add(muscleShape);
+
+// Кости (скелет)
+let boneGeo1=new THREE.CylinderGeometry(0.08,0.12,2.2,8);
+let boneMat=new THREE.MeshPhongMaterial({color:0xeeeedd});
+let spine=new THREE.Mesh(boneGeo1,boneMat);
+spine.position.y=0.2;
+spine.name='bone';
+spine.visible=false;
+humanMesh.add(spine);
+
+humanMesh.position.y=0;
+scene.add(humanMesh);
+}
+
+function animate3D(){
+requestAnimationFrame(animate3D);
+if(!humanMesh)return;
+humanMesh.rotation.y+=0.002;
+renderer.render(scene,camera);
+}
+
+function updateBody(){
+let m=parseInt(document.getElementById('muscleSlider').value);
+let f=parseInt(document.getElementById('fatSlider').value);
+let s=parseInt(document.getElementById('skinSlider').value);
+
+document.getElementById('muscleVal').textContent=m+'%';
+document.getElementById('fatVal').textContent=f+'%';
+document.getElementById('skinVal').textContent=s+'%';
+
+if(muscleShape){
+muscleShape.scale.x=1+(m-45)*0.008;
+muscleShape.scale.z=1+(m-45)*0.008;
+muscleShape.scale.y=1+(f-20)*0.01;
+}
+if(skinMaterial){
+skinMaterial.opacity=s/100;
+}
+}
+
+function showLayer(layer){
+if(!humanMesh)init3D();
+humanMesh.children.forEach(c=>{
+if(c.name==='head')c.visible=layer==='skin';
+if(c.name==='arm'||c.name==='leg')c.visible=layer==='muscle';
+if(c.name==='bone')c.visible=layer==='bone';
+if(c.name==='fatShape')c.visible=layer==='skin';
+});
+}
+
+// === ПОИСК И ДНЕВНИК ===
+function doSearch(){
+let q=document.getElementById('search').value.toLowerCase();
+let r=document.getElementById('results');
+if(!q){r.innerHTML='';return;}
+let db=['курица','говядина','свинина','лосось','форель','тунец','яйцо','молоко','кефир','творог','сыр','гречка','рис','овсянка','макароны','хлеб','картофель','брокколи','огурец','помидор','яблоко','банан','апельсин','авокадо','миндаль','фасоль','чечевица','шоколад','мёд'];
+let found=db.filter(f=>f.includes(q));
+if(!found.length){r.innerHTML='<p style="color:#ff5252;text-align:center">Не найдено</p>';return;}
+r.innerHTML=found.map(f=>'<div class="result-item"><span>'+f[0].toUpperCase()+f.slice(1)+'</span><button onclick="addItem(\''+f+'\')">+</button></div>').join('');
+}
+
+function addItem(name){
+let g=parseFloat(document.getElementById('grams').value)||100;
+let data={
+'курица':{Белок:27,Жиры:14,Углеводы:0,Калории:239},
+'говядина':{Белок:26,Жиры:15,Углеводы:0,Калории:250},
+'лосось':{Белок:20,Жиры:13,Углеводы:0,Калории:208},
+'яйцо':{Белок:13,Жиры:11,Углеводы:1,Калории:155},
+'творог':{Белок:18,Жиры:9,Углеводы:3,Калории:169},
+'сыр':{Белок:25,Жиры:33,Углеводы:1,Калории:402},
+'гречка':{Белок:13,Жиры:3,Углеводы:68,Калории:343},
+'рис':{Белок:7,Жиры:1,Углеводы:75,Калории:344},
+'овсянка':{Белок:12,Жиры:6,Углеводы:60,Калории:352},
+'макароны':{Белок:11,Жиры:2,Углеводы:71,Калории:338},
+'хлеб':{Белок:8,Жиры:3,Углеводы:49,Калории:265},
+'картофель':{Белок:2,Жиры:0,Углеводы:17,Калории:77},
+'брокколи':{Белок:3,Жиры:0,Углеводы:7,Калории:34},
+'яблоко':{Белок:0,Жиры:0,Углеводы:14,Калории:52},
+'банан':{Белок:1,Жиры:0,Углеводы:23,Калории:89},
+'авокадо':{Белок:2,Жиры:15,Углеводы:9,Калории:160},
+'миндаль':{Белок:21,Жиры:50,Углеводы:20,Калории:579},
+'шоколад':{Белок:5,Жиры:34,Углеводы:57,Калории:546},
+};
+let d=data[name]||{Белок:5,Жиры:5,Углеводы:10,Калории:100};
+let nutri={};
+for(let k in d)nutri[k]=Math.round(d[k]*g/100*10)/10;
+diary.push({name,g,nutri});
+updateDiary();
+}
+
+function updateDiary(){
+document.getElementById('count').textContent=diary.length;
+let d=document.getElementById('diary');
+let t=document.getElementById('totals');
+if(!diary.length){
+d.innerHTML='<p style="color:#888;text-align:center">Пусто</p>';
+t.classList.add('hidden');
+return;
+}
+t.classList.remove('hidden');
+d.innerHTML=diary.map((item,i)=>'<div class="result-item"><span>'+item.name[0].toUpperCase()+item.name.slice(1)+' ('+item.g+'г)</span><button onclick="delItem('+i+')" style="background:#ff5252">✕</button></div>').join('');
+let tp=0,tf=0,tc=0,tcal=0;
+diary.forEach(item=>{
+tp+=item.nutri['Белок']||0;
+tf+=item.nutri['Жиры']||0;
+tc+=item.nutri['Углеводы']||0;
+tcal+=item.nutri['Калории']||0;
+});
+document.getElementById('tp').textContent=Math.round(tp)+' г';
+document.getElementById('tf').textContent=Math.round(tf)+' г';
+document.getElementById('tc').textContent=Math.round(tc)+' г';
+document.getElementById('tcal').textContent=Math.round(tcal)+' ккал';
+}
+
+function delItem(i){diary.splice(i,1);updateDiary();}
+function resetDiary(){diary=[];updateDiary();}
+
+function runSim(){
+let w=parseFloat(document.getElementById('w').value)||80;
+let h=parseFloat(document.getElementById('h').value)||175;
+let age=parseInt(document.getElementById('age').value)||25;
+let gender=document.getElementById('gender').value;
+let sleep=parseFloat(document.getElementById('sleep').value)||7;
+let stress=parseFloat(document.getElementById('stress').value)||0.3;
+let days=parseInt(document.getElementById('days').value)||30;
+let bmr=gender==='male'?10*w+6.25*h-5*age+5:10*w+6.25*h-5*age-161;
+let tdee=bmr*1.55;
+let tp=0,tf=0,tc=0,tcal=0;
+diary.forEach(item=>{
+tp+=item.nutri['Белок']||0;
+tf+=item.nutri['Жиры']||0;
+tc+=item.nutri['Углеводы']||0;
+tcal+=item.nutri['Калории']||0;
+});
+let muscle=w*0.45,fat=w*0.20;
+let points=[];
+for(let d=0;d<days;d++){
+let calBal=tcal-tdee;
+let dm=0,df=0;
+if(calBal>0){df=calBal/7700*0.7;dm=calBal/7700*0.3;}
+else{df=calBal/7700*0.8;dm=calBal/7700*0.2;}
+muscle+=dm;fat+=df;
+muscle=Math.max(w*0.3,Math.min(w*0.6,muscle));
+fat=Math.max(w*0.03,Math.min(w*0.5,fat));
+points.push({day:d+1,weight:muscle+fat+60,muscle,fat});
+}
+
+// График
+let canvas=document.getElementById('chart');
+let ctx=canvas.getContext('2d');
+ctx.fillStyle='#0a0a0f';ctx.fillRect(0,0,350,200);
+let maxW=Math.max(...points.map(p=>p.weight));
+let minW=Math.min(...points.map(p=>p.weight));
+ctx.strokeStyle='#4CAF50';ctx.lineWidth=2;
+ctx.beginPath();
+points.forEach((p,i)=>{
+let x=20+310*i/(points.length-1);
+let y=180-160*(p.weight-minW)/(maxW-minW||1);
+if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+});
+ctx.stroke();
+
+let last=points[points.length-1];
+document.getElementById('simStats').innerHTML=
+'<div class="stat-row"><span>Вес через '+days+' дн</span><span class="stat-val">'+last.weight.toFixed(1)+' кг</span></div>'+
+'<div class="stat-row"><span>Мышцы</span><span class="stat-val">'+last.muscle.toFixed(1)+' кг</span></div>'+
+'<div class="stat-row"><span>Жир</span><span class="stat-val">'+last.fat.toFixed(1)+' кг ('+(last.fat/last.weight*100).toFixed(1)+'%)</span></div>';
+document.getElementById('simResult').classList.remove('hidden');
+}
+</script>
+</body>
+</html>
