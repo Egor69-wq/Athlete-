@@ -1,16 +1,380 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Athlete Twin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Athlete Twin Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#0a0a0f;color:#e0e0e0;padding-bottom:80px}
+.header{background:linear-gradient(135deg,#0a0a0f,#1a1a2e);padding:16px;text-align:center;border-bottom:2px solid #4CAF50}
+.title{font-size:22px;font-weight:700;background:linear-gradient(135deg,#4CAF50,#2196F3);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{font-size:11px;color:#666}
+.tabs{display:flex;gap:4px;padding:8px;background:#12121a;position:sticky;top:0;z-index:100}
+.tab{flex:1;padding:10px;background:transparent;border:none;border-radius:8px;color:#888;font-weight:600;cursor:pointer;transition:all 0.3s;font-size:13px}
+.tab.active{background:#4CAF50;color:#fff}
+.card{background:#12121a;border-radius:14px;padding:16px;margin:8px;border:1px solid #1a1a2e}
+.card-title{font-size:14px;font-weight:600;margin-bottom:10px;color:#4CAF50}
+input,select{width:100%;padding:12px;background:#0a0a0f;border:1px solid #1a1a2e;border-radius:10px;color:#fff;font-size:14px;margin-bottom:6px}
+input:focus{border-color:#4CAF50;outline:none}
+label{color:#888;font-size:12px;display:block;margin-bottom:4px}
+.btn{width:100%;padding:12px;border:none;border-radius:10px;font-weight:600;cursor:pointer;transition:all 0.2s}
+.btn:active{transform:scale(0.97)}
+.btn-green{background:#4CAF50;color:#fff}
+.btn-blue{background:#2196F3;color:#fff}
+.btn-red{background:#ff5252;color:#fff}
+.btn-purple{background:#7c4dff;color:#fff}
+.btn-orange{background:#ff9800;color:#fff}
+.hidden{display:none}
+.food-item{background:#0a0a0f;padding:10px;border-radius:8px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid #4CAF50;cursor:pointer}
+.food-item:hover{background:#1a1a2e}
+.food-item .info{flex:1}
+.food-item .name{font-weight:500;font-size:14px}
+.food-item .meta{font-size:11px;color:#888}
+.food-item .add{background:#4CAF50;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:600}
+.suggestions{position:sticky;top:60px;z-index:50;background:#12121a;border-radius:10px;max-height:300px;overflow-y:auto;border:1px solid #1a1a2e}
+.suggestion-item{padding:10px;border-bottom:1px solid #1a1a2e;cursor:pointer}
+.suggestion-item:hover{background:#1a1a2e}
+.suggestion-item .name{font-weight:500}
+.suggestion-item .meta{font-size:11px;color:#888}
+.diary-item{background:#0a0a0f;padding:8px 12px;border-radius:8px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
+.diary-item .name{font-weight:500;font-size:13px}
+.diary-item .meta{font-size:11px;color:#888}
+.diary-item .del{color:#ff5252;cursor:pointer;font-weight:600;padding:0 8px}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1a1a2e}
+.stat-val{font-weight:600;color:#4CAF50}
+#viewer3D{width:100%;height:400px;background:#0a0a0f;border-radius:12px;touch-action:manipulation}
+.slider-container{margin:8px 0}
+.slider-container label{font-size:11px;color:#888;display:flex;justify-content:space-between}
+.slider-container input[type=range]{width:100%;margin:4px 0;accent-color:#4CAF50}
+canvas{display:block;width:100%!important;height:auto!important}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.chart-grid .chart-box{background:#0a0a0f;border-radius:8px;padding:8px;border:1px solid #1a1a2e}
+.chart-grid .chart-box .chart-title{color:#888;font-size:10px;text-align:center;margin-bottom:4px;font-weight:600}
+.chart-grid canvas{width:100%!important;height:auto!important;border-radius:4px}
+</style>
 </head>
 <body>
-<h1 style="color:green;">✅ ATHLETE TWIN РАБОТАЕТ</h1>
-<p style="color:white;">Если вы это видите - сайт работает</p>
+
+<div class="header">
+<div class="title">Athlete Twin Pro</div>
+<div class="subtitle" id="status">Загрузка...</div>
+</div>
+
+<div class="tabs">
+<button class="tab active" onclick="switchTab('eat')">Еда</button>
+<button class="tab" onclick="switchTab('sim')">Симуляция</button>
+<button class="tab" onclick="switchTab('body')">3D Тело</button>
+</div>
+
+<div id="tab-eat">
+<div class="card">
+<div class="card-title">Поиск продуктов</div>
+<input type="text" id="search" placeholder="Начните вводить название..." oninput="searchFood()" autocomplete="off">
+<div id="suggestions" class="suggestions hidden"></div>
+<div id="searchStatus" style="font-size:11px;color:#666;text-align:center;padding:4px;"></div>
+</div>
+<div class="card">
+<div class="card-title">Дневник (<span id="count">0</span>)</div>
+<div id="diary"></div>
+<div id="totals" class="hidden">
+<div class="stat-row"><span>Белок</span><span class="stat-val" id="tp">0 г</span></div>
+<div class="stat-row"><span>Жиры</span><span class="stat-val" id="tf">0 г</span></div>
+<div class="stat-row"><span>Углеводы</span><span class="stat-val" id="tc">0 г</span></div>
+<div class="stat-row"><span>Калории</span><span class="stat-val" id="tcal">0 ккал</span></div>
+</div>
+<button class="btn btn-red" onclick="resetDiary()">Сбросить дневник</button>
+</div>
+</div>
+
+<div id="tab-sim" class="hidden">
+<div class="card">
+<div class="card-title">Параметры тела</div>
+<label>Вес (кг)</label>
+<input type="number" id="w" value="80">
+<label>Рост (см)</label>
+<input type="number" id="h" value="175">
+<label>Возраст</label>
+<input type="number" id="age" value="25">
+<label>Пол</label>
+<select id="gender"><option value="male">Мужчина</option><option value="female">Женщина</option></select>
+<label>Активность (1.2-2.0)</label>
+<input type="number" id="activity" value="1.55" step="0.05">
+<label>Сон (часов)</label>
+<input type="number" id="sleep" value="7">
+<label>Стресс (0-1)</label>
+<input type="number" id="stress" value="0.3" step="0.1">
+<label>Дней симуляции</label>
+<input type="number" id="days" value="30">
+<button class="btn btn-green" onclick="runSim()">Запустить симуляцию</button>
+</div>
+<div id="simResult" class="hidden">
+<div class="card">
+<div class="card-title">Динамика параметров</div>
+<div class="chart-grid" id="chartsContainer"></div>
+<div id="simStats"></div>
+</div>
+</div>
+</div>
+
+<div id="tab-body" class="hidden">
+<div class="card">
+<div class="card-title">3D Модель</div>
+<div id="viewer3D"></div>
+<div class="slider-container">
+<label>Мышцы <span id="muscleVal">45%</span></label>
+<input type="range" id="muscleSlider" min="30" max="60" value="45" oninput="updateBody()">
+</div>
+<div class="slider-container">
+<label>Жир <span id="fatVal">20%</span></label>
+<input type="range" id="fatSlider" min="3" max="50" value="20" oninput="updateBody()">
+</div>
+<div class="slider-container">
+<label>Прозрачность <span id="skinVal">100%</span></label>
+<input type="range" id="skinSlider" min="0" max="100" value="100" oninput="updateBody()">
+</div>
+<div class="row" style="display:flex;gap:8px">
+<button class="btn btn-blue" onclick="showLayer('skin')">Кожа</button>
+<button class="btn btn-purple" onclick="showLayer('muscle')">Мышцы</button>
+<button class="btn btn-blue" onclick="showLayer('bone')">Кости</button>
+</div>
+</div>
+</div>
+
 <script>
-alert('Привет! Athlete Twin запущен!');
+const FOOD_DB = [
+{id:1,name:"Куриная грудка",cat:"Мясо",cal:165,pro:31,fat:3.6,car:0},
+{id:2,name:"Говядина",cat:"Мясо",cal:250,pro:26,fat:15,car:0},
+{id:3,name:"Лосось",cat:"Рыба",cal:208,pro:20,fat:13,car:0},
+{id:4,name:"Тунец",cat:"Рыба",cal:116,pro:25,fat:1.5,car:0},
+{id:5,name:"Яйцо",cat:"Молочка",cal:155,pro:13,fat:11,car:1.1},
+{id:6,name:"Творог",cat:"Молочка",cal:121,pro:17,fat:5,car:2.5},
+{id:7,name:"Гречка",cat:"Крупы",cal:110,pro:4.2,fat:1,car:21},
+{id:8,name:"Рис",cat:"Крупы",cal:116,pro:2.4,fat:0.3,car:25},
+{id:9,name:"Картофель",cat:"Овощи",cal:77,pro:2,fat:0,car:17},
+{id:10,name:"Яблоко",cat:"Фрукты",cal:52,pro:0.3,fat:0.2,car:14}
+];
+document.getElementById('status').textContent = 'Загружено ' + FOOD_DB.length + ' продуктов';
+
+let diary = [];
+let scene,camera,renderer,humanMesh;
+
+function searchFood() {
+const q = document.getElementById('search').value.toLowerCase().trim();
+const s = document.getElementById('suggestions');
+if (!q) { s.classList.add('hidden'); return; }
+const r = FOOD_DB.filter(i => i.name.toLowerCase().includes(q));
+if (!r.length) { s.innerHTML = '<div style="padding:10px;color:#666;">Ничего не найдено</div>'; s.classList.remove('hidden'); return; }
+s.innerHTML = r.map(i => `<div class="suggestion-item" onclick="addToDiary(${i.id})"><div class="name">${i.name}</div><div class="meta">${i.cal} ккал | Б:${i.pro} Ж:${i.fat} У:${i.car}</div></div>`).join('');
+s.classList.remove('hidden');
+}
+
+function addToDiary(id) {
+const p = FOOD_DB.find(i => i.id === id);
+if (!p) return;
+const g = parseFloat(prompt('Сколько грамм?', '100'));
+if (!g || g <= 0) return;
+const r = g/100;
+diary.push({id:p.id,name:p.name,grams:g,cal:Math.round(p.cal*r*10)/10,pro:Math.round(p.pro*r*10)/10,fat:Math.round(p.fat*r*10)/10,car:Math.round(p.car*r*10)/10});
+document.getElementById('suggestions').classList.add('hidden');
+document.getElementById('search').value = '';
+updateDiary();
+saveDiary();
+}
+
+function updateDiary() {
+const d = document.getElementById('diary');
+const t = document.getElementById('totals');
+document.getElementById('count').textContent = diary.length;
+if (!diary.length) { d.innerHTML = '<div style="color:#888;text-align:center;padding:20px;">Пусто</div>'; t.classList.add('hidden'); return; }
+t.classList.remove('hidden');
+d.innerHTML = diary.map((item,i) => `<div class="diary-item"><span class="name">${item.name}</span><span class="meta">${item.grams}г | ${item.cal} ккал</span><span class="del" onclick="removeFromDiary(${i})">✕</span></div>`).join('');
+let tp=0,tf=0,tc=0,tcal=0;
+diary.forEach(item => { tp += item.pro || 0; tf += item.fat || 0; tc += item.car || 0; tcal += item.cal || 0; });
+document.getElementById('tp').textContent = Math.round(tp)+' г';
+document.getElementById('tf').textContent = Math.round(tf)+' г';
+document.getElementById('tc').textContent = Math.round(tc)+' г';
+document.getElementById('tcal').textContent = Math.round(tcal)+' ккал';
+}
+
+function removeFromDiary(i) { diary.splice(i,1); updateDiary(); saveDiary(); }
+function resetDiary() { if (!confirm('Удалить?')) return; diary = []; updateDiary(); saveDiary(); }
+function saveDiary() { localStorage.setItem('athlete_diary', JSON.stringify(diary)); }
+
+document.addEventListener('DOMContentLoaded', function() {
+const saved = localStorage.getItem('athlete_diary');
+if (saved) { try { diary = JSON.parse(saved); updateDiary(); } catch(e) {} }
+});
+
+function switchTab(t) {
+document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+document.querySelectorAll('[id^="tab-"]').forEach(d => d.classList.add('hidden'));
+document.getElementById('tab-'+t).classList.remove('hidden');
+event.target.classList.add('active');
+if (t === 'body') setTimeout(init3D, 100);
+}
+
+function runSim() {
+const w = parseFloat(document.getElementById('w').value) || 80;
+const h = parseFloat(document.getElementById('h').value) || 175;
+const age = parseInt(document.getElementById('age').value) || 25;
+const gender = document.getElementById('gender').value;
+const activity = parseFloat(document.getElementById('activity').value) || 1.55;
+const sleep = parseFloat(document.getElementById('sleep').value) || 7;
+const stress = parseFloat(document.getElementById('stress').value) || 0.3;
+const days = parseInt(document.getElementById('days').value) || 30;
+let bmr = gender === 'male' ? 10*w + 6.25*h - 5*age + 5 : 10*w + 6.25*h - 5*age - 161;
+const tdee = bmr * activity * (1 + (7-sleep)*0.02) * (1 + stress*0.1);
+let tcal = 0;
+diary.forEach(item => tcal += item.cal || 0);
+let weight = w, muscle = w*0.45, fat = w*0.20, other = w-muscle-fat;
+const points = [];
+for (let d = 0; d < days; d++) {
+const deficit = tcal - tdee;
+let weightChange = deficit / 7700;
+let fatChange = weightChange * 0.7, muscleChange = weightChange * 0.3;
+if (weightChange < 0) { fatChange = weightChange * 0.8; muscleChange = weightChange * 0.2; }
+fat = Math.max(w*0.03, Math.min(w*0.5, fat + fatChange));
+muscle = Math.max(w*0.30, Math.min(w*0.60, muscle + muscleChange));
+weight = muscle + fat + other;
+const bmi = weight / ((h/100)*(h/100));
+const idealWeight = gender === 'male' ? (h-100)*0.9 : (h-105)*0.85;
+points.push({day: d+1, weight: weight, muscle: muscle, fat: fat, bmi: bmi, fatPercent: (fat/weight)*100, bmr: bmr * (1 + (weight-w)/w * 0.5), ratio: muscle/fat, ideal: idealWeight, stress: stress + (Math.random()-0.5)*0.05, hormones: 50 + (d/days)*10 + (Math.random()-0.5)*5});
+}
+const container = document.getElementById('chartsContainer');
+container.innerHTML = '';
+const charts = [
+{id:'weight',title:'Вес',color:'#4CAF50'},
+{id:'muscle',title:'Мышцы',color:'#ff6b6b'},
+{id:'fat',title:'Жир',color:'#ffd93d'},
+{id:'bmi',title:'ИМТ',color:'#6bcb77'},
+{id:'fatPercent',title:'Жир %',color:'#ff6b6b'},
+{id:'bmr',title:'Метаболизм',color:'#4d96ff'},
+{id:'ratio',title:'Мышцы/Жир',color:'#9b59b6'},
+{id:'hormones',title:'Гормоны',color:'#e74c3c'},
+{id:'stress',title:'Стресс',color:'#f39c12'},
+{id:'ideal',title:'Идеал',color:'#2ecc71'}
+];
+charts.forEach(function(chart) {
+const box = document.createElement('div');
+box.className = 'chart-box';
+const title = document.createElement('div');
+title.className = 'chart-title';
+title.textContent = chart.title;
+box.appendChild(title);
+const canvas = document.createElement('canvas');
+canvas.width = 300;
+canvas.height = 150;
+canvas.id = 'chart_' + chart.id;
+box.appendChild(canvas);
+container.appendChild(box);
+drawChart(canvas.id, points, chart.id, chart.color);
+});
+const last = points[points.length-1];
+document.getElementById('simStats').innerHTML = `
+<div class="stat-row"><span>Вес</span><span class="stat-val">${last.weight.toFixed(1)} кг</span></div>
+<div class="stat-row"><span>Мышцы</span><span class="stat-val">${last.muscle.toFixed(1)} кг</span></div>
+<div class="stat-row"><span>Жир</span><span class="stat-val">${last.fat.toFixed(1)} кг (${last.fatPercent.toFixed(1)}%)</span></div>
+<div class="stat-row"><span>ИМТ</span><span class="stat-val">${last.bmi.toFixed(1)}</span></div>
+`;
+document.getElementById('simResult').classList.remove('hidden');
+}
+
+function drawChart(canvasId, data, key, color) {
+const canvas = document.getElementById(canvasId);
+if (!canvas) return;
+const ctx = canvas.getContext('2d');
+const w = canvas.width, h = canvas.height;
+ctx.clearRect(0, 0, w, h);
+ctx.fillStyle = '#0a0a0f';
+ctx.fillRect(0, 0, w, h);
+const values = data.map(d => d[key] || 0);
+const maxVal = Math.max(...values) * 1.1 || 1;
+const minVal = Math.min(...values) * 0.9 || 0;
+ctx.strokeStyle = color;
+ctx.lineWidth = 2;
+ctx.beginPath();
+values.forEach(function(val, i) {
+const x = 20 + (w - 40) * i / (values.length - 1);
+const y = h - 20 - (h - 40) * (val - minVal) / (maxVal - minVal);
+if (i === 0) ctx.moveTo(x, y);
+else ctx.lineTo(x, y);
+});
+ctx.stroke();
+const lastVal = values[values.length-1];
+ctx.fillStyle = color;
+ctx.font = 'bold 12px system-ui';
+ctx.textAlign = 'right';
+ctx.fillText(lastVal.toFixed(1), w - 5, 25);
+}
+
+function init3D() {
+if (scene) return;
+const container = document.getElementById('viewer3D');
+const w = container.offsetWidth;
+const h = container.offsetHeight;
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0f);
+camera = new THREE.PerspectiveCamera(45, w/h, 0.1, 100);
+camera.position.set(0, 1.5, 5);
+camera.lookAt(0, 0.5, 0);
+renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setSize(w, h);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+container.appendChild(renderer.domElement);
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(3, 5, 3);
+scene.add(light);
+const ambient = new THREE.AmbientLight(0x333344, 0.5);
+scene.add(ambient);
+createHuman();
+animate3D();
+}
+
+function createHuman() {
+humanMesh = new THREE.Group();
+const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.55, 2.0, 24), new THREE.MeshPhongMaterial({color: 0x4CAF50, transparent: true, opacity: 0.3}));
+torso.position.y = 0.3;
+humanMesh.add(torso);
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 24, 24), new THREE.MeshPhongMaterial({color: 0xffcc99}));
+head.position.y = 1.6;
+humanMesh.add(head);
+for (var side = -1; side <= 1; side += 2) {
+const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 1.2, 12), new THREE.MeshPhongMaterial({color: 0x4CAF50, transparent: true, opacity: 0.3}));
+arm.position.set(side * 0.75, 0.4, 0);
+arm.rotation.z = side * 0.15;
+humanMesh.add(arm);
+const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.0, 12), new THREE.MeshPhongMaterial({color: 0x4CAF50, transparent: true, opacity: 0.3}));
+leg.position.set(side * 0.28, -0.8, 0);
+humanMesh.add(leg);
+}
+scene.add(humanMesh);
+}
+
+function animate3D() {
+requestAnimationFrame(animate3D);
+if (humanMesh) { humanMesh.rotation.y += 0.005; }
+if (renderer && scene && camera) { renderer.render(scene, camera); }
+}
+
+function updateBody() {
+var muscle = parseInt(document.getElementById('muscleSlider').value);
+var fat = parseInt(document.getElementById('fatSlider').value);
+var skin = parseInt(document.getElementById('skinSlider').value);
+document.getElementById('muscleVal').textContent = muscle + '%';
+document.getElementById('fatVal').textContent = fat + '%';
+document.getElementById('skinVal').textContent = skin + '%';
+if (humanMesh) {
+var scale = 1 + (muscle - 45) * 0.005 + (fat - 20) * 0.003;
+humanMesh.scale.set(scale, 1 + (fat - 20) * 0.005, scale);
+}
+}
+
+function showLayer(layer) {
+alert('Показан слой: ' + layer);
+}
 </script>
 </body>
 </html>
-Тест 
+Полная версия
